@@ -16,7 +16,7 @@ constexpr int PIN_TOUCH_CS   = 33;
 constexpr int PIN_TOUCH_IRQ  = 36;
 constexpr int PIN_TOUCH_CLK  = 25;
 constexpr int PIN_TOUCH_MISO = 39;
-constexpr int PIN_TOUCH_MOSI = 32;
+constexpr int PIN_TOUCH_MOSI = 33;
 
 constexpr int PIN_LED_R     = 4;
 constexpr int PIN_LED_G     = 16;
