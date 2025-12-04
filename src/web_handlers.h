@@ -1,10 +1,13 @@
-#include <Arduino.h>
+#ifndef WEB_HANDLERS_H
+#define WEB_HANDLERS_H
+
 #include <WebServer.h>
-#include "app_api.h"
+#include "app_api.h" 
+#include "espnow_manager.h" // Importante: Permite enviar dados para os escravos
 
 static WebServer* g_server = nullptr;
 
-// HTML da página
+// O HTML COMPLETO (Sua versão com Excel/LocalStorage)
 static const char index_html[] PROGMEM = R"rawliteral(
 <!doctype html>
 <html lang="pt-BR">
@@ -114,6 +117,7 @@ static bool validarNumeros(String str) {
   return true;
 }
 
+// Handler para Receber Dados (Salvar ou Atualizar)
 static void receberDadosHandler() {
   Receita r;
   r.id = g_server->arg("id").toInt();
@@ -126,57 +130,65 @@ static void receberDadosHandler() {
   if (!validarNumeros(r.quantidade)) { g_server->send(400, "text/plain", "Quantidade deve conter apenas numeros"); return; }
   if (!validarNumeros(r.barcode)) { g_server->send(400, "text/plain", "Codigo de barras deve conter apenas numeros"); return; }
 
+  // 1. Tenta ATUALIZAR se já existe
   for (int i = 0; i < totalReceitas; i++) {
     if (receitas[i].id == r.id) {
       receitas[i] = r;
       salvarReceitasEEPROM();
-      g_server->send(200, "text/plain", "OK");
+      enviarDadosEspNow(r, false); // <--- IMPORTANTE: Envia atualização para Escravos (false = Gravar)
+      g_server->send(200, "text/plain", "OK (Atualizado)");
       return;
     }
   }
+
+  // 2. Se não existe, CRIA NOVO
   if (totalReceitas < MAX_RECEITAS) {
     receitas[totalReceitas++] = r;
     salvarReceitasEEPROM();
-    g_server->send(200, "text/plain", "OK");
+    enviarDadosEspNow(r, false); // <--- IMPORTANTE: Envia nova receita para Escravos (false = Gravar)
+    g_server->send(200, "text/plain", "OK (Novo)");
   } else {
     g_server->send(507, "text/plain", "Limite maximo de receitas atingido");
   }
 }
 
+// Handler para Apagar Receita
 static void apagarReceitaHandler() {
   int id = g_server->arg("id").toInt();
+  
+  // Encontra e apaga
   for (int i = 0; i < totalReceitas; i++) {
     if (receitas[i].id == id) {
-      for (int j = i; j < totalReceitas - 1; j++) receitas[j] = receitas[j + 1];
+      
+      // 1. Avisa os escravos para apagarem
+      Receita rTemp;
+      rTemp.id = id;
+      enviarDadosEspNow(rTemp, true); // <--- IMPORTANTE: true = Apagar
+      
+      // 2. Remove da lista do Mestre
+      for (int j = i; j < totalReceitas - 1; j++) {
+        receitas[j] = receitas[j + 1];
+      }
       totalReceitas--;
-      for (int k = 0; k < totalReceitas; k++) receitas[k].id = k + 1;
       salvarReceitasEEPROM();
-      g_server->send(200, "text/plain", "OK");
+      
+      g_server->send(200, "text/plain", "OK (Apagado)");
       return;
     }
   }
   g_server->send(404, "text/plain", "Receita nao encontrada");
 }
 
-static void limparReceitasHandler() {
-  totalReceitas = 0;
-  for (int i = 0; i < MAX_RECEITAS; i++) {
-    receitas[i].id = 0;
-    receitas[i].codigo = "";
-    receitas[i].quantidade = "";
-    receitas[i].descricao = "";
-    receitas[i].barcode = "";
-  }
-  currentID = 1;
-  mostrarReceitaLVGL(currentID);
-  salvarReceitasEEPROM();
-  g_server->send(200, "text/plain", "OK");
+static void register_web_routes(WebServer &server) {
+  g_server = &server;
+  server.on("/", HTTP_GET, [](){ g_server->send_P(200, "text/html", index_html); });
+  server.on("/receita", HTTP_GET, receberDadosHandler);
+  server.on("/apagar", HTTP_GET, apagarReceitaHandler);
+  server.on("/limpar", HTTP_GET, [](){ 
+    totalReceitas = 0; 
+    salvarReceitasEEPROM(); 
+    g_server->send(200, "text/plain", "OK"); 
+  });
 }
 
-void register_web_routes(WebServer &server) {
-  g_server = &server;
-  server.on("/", [](){ g_server->send_P(200, "text/html", index_html); });
-  server.on("/receita", receberDadosHandler);
-  server.on("/apagar", apagarReceitaHandler);
-  server.on("/limpar", limparReceitasHandler);
-}
+#endif

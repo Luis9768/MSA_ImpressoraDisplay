@@ -10,6 +10,9 @@
 #include <nvs_flash.h>
 #include <time.h>
 #include "pt_font.h"
+#include "app_api.h"
+#include "espnow_manager.h" // <--- Inclua aqui também
+#include "web_handlers.h"
 
 // ==== PINOS DE HARDWARE ====
 constexpr int PIN_TOUCH_CS   = 33;
@@ -29,8 +32,9 @@ constexpr int LVGL_BUF_LINES = 10;
 // Pinos ajustados para a placa informada
 // Disponiveis: GPIO22 (sensor). Sem reset de hardware.
 constexpr int SENSOR_PIN = 22;       // entrada do sensor (usa pull-up interno)
-constexpr int PRINTER_TX_PIN = 1;    // TX da impressora (GPIO1)
-constexpr int PRINTER_RX_PIN = 3;    // RX da impressora (GPIO3)
+// Alterado para 27 (conector lateral) para não travar o USB
+constexpr int PRINTER_TX_PIN = 27;   
+constexpr int PRINTER_RX_PIN = -1;   // -1 desativa a leitura (não precisamos ler da impressora)
 constexpr unsigned long PRINTER_BAUD_RATE = 9600;
 // Sem temporizador de reset por hardware
 
@@ -311,6 +315,9 @@ void setup() {
   
   setupHardware();
   carregarPersistido();
+
+  // Inicia Comunicação
+  setupEspNowMaster();   // <--- Chama a função do novo arquivo
   
   // WiFi AP
   WiFi.mode(WIFI_AP);
