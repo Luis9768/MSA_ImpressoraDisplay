@@ -10,5 +10,6 @@ void salvarReceitaMemoria(Receita r);
 Receita carregarReceitaMemoria(int id);
 int getTotalReceitas();
 void limparMemoria();
+void desativarReceita(int id);
 
 #endif

@@ -40,3 +40,12 @@ int getTotalReceitas() {
 void limparMemoria() {
     preferences.clear();
 }
+
+void desativarReceita(int id) {
+    Receita r = carregarReceitaMemoria(id);
+    if (r.id != 0) { // Se existe
+        r.ativa = false;
+        salvarReceitaMemoria(r);
+        Serial.printf("Receita ID %d desativada.\n", id);
+    }
+}

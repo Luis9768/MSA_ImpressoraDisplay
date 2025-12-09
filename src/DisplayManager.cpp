@@ -150,9 +150,9 @@ void atualizarListaProdutos() {
 void setupDisplay() {
     pinMode(21, OUTPUT); digitalWrite(21, HIGH); // Luz ON
     
-    tft.begin(); tft.setRotation(1); tft.fillScreen(TFT_BLACK);
+    tft.begin(); tft.setRotation(0); tft.fillScreen(TFT_BLACK);
     touchSpi.begin(TOUCH_XPT_CLK, TOUCH_XPT_MISO, TOUCH_XPT_MOSI, TOUCH_XPT_CS);
-    touch.begin(touchSpi); touch.setRotation(1);
+    touch.begin(touchSpi); touch.setRotation(0);
 
     lv_init();
     lv_disp_draw_buf_init(&draw_buf, buf, NULL, SCREEN_WIDTH * 10);

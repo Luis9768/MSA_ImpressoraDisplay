@@ -7,8 +7,8 @@
 #define HOSTNAME  "master-cyd"
 
 // --- Hardware do CYD (ESP Amarelo) ---
-#define SCREEN_WIDTH  320
-#define SCREEN_HEIGHT 240
+#define SCREEN_WIDTH  240
+#define SCREEN_HEIGHT 320
 
 // Pinos do Touch (XPT2046) - O CYD usa um barramento SPI separado para o touch
 #define TOUCH_XPT_CS   33

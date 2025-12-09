@@ -188,6 +188,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     </form>
 
     <div class="footer">
+      <a href="/lista" style="color: #003366; text-decoration: none; font-weight: bold; font-size: 14px;">GERENCIAR PRODUTOS</a><br><br>
       MSA Technology V2.0
     </div>
   </div>
@@ -243,6 +244,79 @@ void handleSave() {
     server.send(200, "text/html", sucessoHtml);
 }
 
+
+
+void handleList() {
+    String html = R"rawliteral(
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Gerenciar Produtos</title>
+      <style>
+        body { background: linear-gradient(135deg, #003366 0%, #00d2ff 100%); font-family: 'Segoe UI', sans-serif; min-height: 100vh; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card { background: white; border-radius: 15px; padding: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .info { flex-grow: 1; }
+        .code { font-weight: bold; color: #003366; font-size: 18px; }
+        .desc { color: #666; font-size: 14px; }
+        .btn-del { background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; text-decoration: none; font-weight: bold; }
+        .header { text-align: center; color: white; margin-bottom: 20px; }
+        .btn-back { display: block; width: 100%; text-align: center; background: rgba(255,255,255,0.2); color: white; padding: 15px; border-radius: 10px; text-decoration: none; font-weight: bold; margin-bottom: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+            <h1>Produtos Ativos</h1>
+        </div>
+        <a href="/" class="btn-back">VOLTAR PARA CADASTRO</a>
+    )rawliteral";
+
+    int total = getTotalReceitas();
+    bool temItem = false;
+
+    for (int i = 1; i <= total; i++) {
+        Receita r = carregarReceitaMemoria(i);
+        if (r.ativa) {
+            temItem = true;
+            char itemBuf[512];
+            sprintf(itemBuf, 
+                "<div class='card'>"
+                "<div class='info'><div class='code'>%s</div><div class='desc'>ID: %d | %s</div></div>"
+                "<a href='/deletar?id=%d' class='btn-del' onclick=\"return confirm('Tem certeza?');\">EXCLUIR</a>"
+                "</div>", 
+                r.codigo, r.id, r.descricao, r.id);
+            html += itemBuf;
+        }
+    }
+
+    if (!temItem) {
+        html += "<div style='text-align:center; color:white;'>Nenhum produto cadastrado.</div>";
+    }
+
+    html += "</div></body></html>";
+    server.send(200, "text/html", html);
+}
+
+void handleDelete() {
+    if (server.hasArg("id")) {
+        int id = server.arg("id").toInt();
+        desativarReceita(id);
+        
+        // Avisa os slaves para removerem também (mandando com ativa=false)
+        Receita r = carregarReceitaMemoria(id); // Carrega ela já desativada
+        enviarReceitaParaSlaves(r);
+        
+        // Atualiza a tela do Master
+        atualizarListaProdutos();
+    }
+    // Redireciona de volta para a lista
+    server.sendHeader("Location", "/lista");
+    server.send(303);
+}
+
 void setupNetwork() {
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(WIFI_SSID, WIFI_PASS);
@@ -259,6 +333,8 @@ void setupNetwork() {
 
     server.on("/", handleRoot);
     server.on("/salvar", handleSave);
+    server.on("/lista", handleList);
+    server.on("/deletar", handleDelete);
     server.onNotFound(handleRoot); 
     server.begin();
 }
