@@ -91,13 +91,13 @@ int32_t getWiFiChannel(const char *ssid) {
 
 void setupNetworkSlave() {
     // Inicia NVS
-    preferences.begin("slave_db_v2", false);
+    preferences.begin("slave_db_v3", false);
     
     // Reset Forcado na primeira vez
     if (preferences.getInt("reset_done", 0) == 0) {
         preferences.clear();
         preferences.putInt("reset_done", 1);
-        Serial.println(">>> SLAVE MEMORY RESET (V2) <<<");
+        Serial.println(">>> SLAVE MEMORY RESET (V3) <<<");
     }
 
     carregarReceitasNVS();

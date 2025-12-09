@@ -145,58 +145,78 @@ void my_touch_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
 void mostrarTelaProducao(Receita r) {
     lv_obj_clean(lv_scr_act());
 
-    // Cabeçalho Azul
+    // Fundo Geral
+    lv_obj_set_style_bg_color(lv_scr_act(), lv_color_hex(0xF0F0F0), 0);
+
+    // Cabeçalho Azul (Menor)
     lv_obj_t *header = lv_obj_create(lv_scr_act());
-    lv_obj_set_size(header, 240, 90);
+    lv_obj_set_size(header, 240, 60);
     lv_obj_set_style_bg_color(header, lv_color_hex(0x003366), 0);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
     
-    // Nome do Produto
+    // Nome do Produto (Truncado se for longo)
     lv_obj_t *lbl = lv_label_create(header);
-    lv_label_set_long_mode(lbl, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(lbl, 210);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_width(lbl, 200);
     lv_label_set_text(lbl, r.descricao);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(lbl);
     lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_22, 0);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_22, 0); // Usando 22
 
-    // Meta
-    char metaTxt[32];
-    sprintf(metaTxt, "META: %d CX", r.quantidade);
-    lv_obj_t *lblMeta = lv_label_create(lv_scr_act());
-    lv_label_set_text(lblMeta, metaTxt);
-    lv_obj_align(lblMeta, LV_ALIGN_TOP_MID, 0, 100);
-    lv_obj_set_style_text_color(lblMeta, lv_palette_main(LV_PALETTE_GREY), 0);
+    // Container do Contador (Card Branco no Meio)
+    lv_obj_t * cardContador = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(cardContador, 220, 160);
+    lv_obj_center(cardContador);
+    lv_obj_set_style_bg_color(cardContador, lv_color_white(), 0);
+    lv_obj_set_style_radius(cardContador, 15, 0);
+    lv_obj_set_style_shadow_width(cardContador, 20, 0);
+    lv_obj_set_style_shadow_color(cardContador, lv_palette_main(LV_PALETTE_GREY), 0);
+    lv_obj_set_style_shadow_opa(cardContador, 50, 0);
+    lv_obj_clear_flag(cardContador, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Label "PRODUZIDO"
+    lv_obj_t * lblTitulo = lv_label_create(cardContador);
+    lv_label_set_text(lblTitulo, "PRODUZIDO");
+    lv_obj_align(lblTitulo, LV_ALIGN_TOP_MID, 0, -5);
+    lv_obj_set_style_text_color(lblTitulo, lv_color_hex(0x888888), 0);
+    lv_obj_set_style_text_font(lblTitulo, &lv_font_montserrat_14, 0);
 
     // Contador Gigante
-    static lv_obj_t * lblContador = NULL; // Static para persistir
-    lblContador = lv_label_create(lv_scr_act());
+    static lv_obj_t * lblContador = NULL; 
+    lblContador = lv_label_create(cardContador);
     lv_label_set_text(lblContador, "0");
     lv_obj_center(lblContador);
     lv_obj_set_style_text_font(lblContador, &lv_font_montserrat_32, 0);
-    lv_obj_set_style_transform_zoom(lblContador, 512, 0); // Zoom 2x
-    lv_obj_set_style_text_color(lblContador, lv_color_hex(0x28a745), 0);
+    lv_obj_set_style_transform_zoom(lblContador, 800, 0); // Zoom 3x (Gigante)
+    lv_obj_set_style_text_color(lblContador, lv_color_hex(0x003366), 0); // Azul Escuro
     
-    // Salva ponteiro globalmente (gambiarra segura para este escopo)
-    lv_obj_set_user_data(lblContador, (void*)999); // Marcador
+    lv_obj_set_user_data(lblContador, (void*)999); // Marcador para update
 
-    // Botão Voltar - Maior e mais afastado da borda
+    // Meta (Pequeno abaixo do contador)
+    char metaTxt[32];
+    sprintf(metaTxt, "META: %d", r.quantidade);
+    lv_obj_t *lblMeta = lv_label_create(cardContador);
+    lv_label_set_text(lblMeta, metaTxt);
+    lv_obj_align(lblMeta, LV_ALIGN_BOTTOM_MID, 0, 5);
+    lv_obj_set_style_text_color(lblMeta, lv_color_hex(0x28a745), 0); // Verde
+    lv_obj_set_style_text_font(lblMeta, &lv_font_montserrat_14, 0); // Usando 14
+
+
+    // Botão Voltar - DIREITA E VERMELHO
     lv_obj_t * btnVoltar = lv_btn_create(lv_scr_act());
-    lv_obj_set_size(btnVoltar, 140, 70); // Bem grande para facilitar o toque
-    lv_obj_align(btnVoltar, LV_ALIGN_BOTTOM_LEFT, 20, -20);
-    lv_obj_set_style_bg_color(btnVoltar, lv_color_hex(0xDC3545), 0);
+    lv_obj_set_size(btnVoltar, 120, 60); 
+    lv_obj_align(btnVoltar, LV_ALIGN_BOTTOM_RIGHT, -10, -10); // Canto Inferior Direito
+    lv_obj_set_style_bg_color(btnVoltar, lv_color_hex(0xFF0000), 0); // Vermelho Vivo
+    lv_obj_set_style_radius(btnVoltar, 10, 0);
+    lv_obj_set_style_shadow_width(btnVoltar, 10, 0);
+    lv_obj_set_style_shadow_opa(btnVoltar, 50, 0);
     lv_obj_add_event_cb(btnVoltar, event_handler_voltar, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t * lblVoltar = lv_label_create(btnVoltar);
     lv_label_set_text(lblVoltar, "SAIR");
     lv_obj_center(lblVoltar);
-
-    // Rodapé Status
-    lv_obj_t *footer = lv_label_create(lv_scr_act());
-    lv_label_set_text(footer, "STATUS: OK");
-    lv_obj_align(footer, LV_ALIGN_BOTTOM_RIGHT, -10, -20);
-    lv_obj_set_style_text_color(footer, lv_color_hex(0xFF9900), 0);
+    lv_obj_set_style_text_font(lblVoltar, &lv_font_montserrat_14, 0); // Usando 14
 }
 
 void atualizarContador(int qtd) {
