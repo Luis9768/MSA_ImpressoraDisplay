@@ -224,6 +224,7 @@ void handleSave() {
     // Página de Sucesso Bonita
     String sucessoHtml = R"rawliteral(
       <!DOCTYPE html><html><head>
+      <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <style>
         body{background: linear-gradient(135deg, #003366 0%, #00d2ff 100%); font-family:'Segoe UI', sans-serif; height:100vh; display:flex; justify-content:center; align-items:center; margin:0;}
@@ -234,7 +235,7 @@ void handleSave() {
         a{display:block; width:100%; text-decoration:none; background:#003366; color:white; padding:15px; border-radius:10px; font-weight:bold;}
       </style></head><body>
       <div class="card">
-        <span class="icon-check">✔</span>
+        <span class="icon-check">&#10004;</span>
         <h1>Sucesso!</h1>
         <p>Produto cadastrado.</p>
         <a href='/'>NOVO CADASTRO</a>
@@ -272,6 +273,7 @@ void handleList() {
             <h1>Produtos Ativos</h1>
         </div>
         <a href="/" class="btn-back">VOLTAR PARA CADASTRO</a>
+        <a href="/reset" class="btn-back" style="background: #dc3545;" onclick="return confirm('ATENCAO: Isso apaga TUDO! Confirma?');">LIMPAR TUDO (RESET)</a>
     )rawliteral";
 
     int total = getTotalReceitas();
@@ -279,13 +281,17 @@ void handleList() {
 
     for (int i = 1; i <= total; i++) {
         Receita r = carregarReceitaMemoria(i);
+        // Serial.printf("Item %d: Ativa=%d\n", r.id, r.ativa); // Debug
         if (r.ativa) {
             temItem = true;
             char itemBuf[512];
             sprintf(itemBuf, 
                 "<div class='card'>"
                 "<div class='info'><div class='code'>%s</div><div class='desc'>ID: %d | %s</div></div>"
-                "<a href='/deletar?id=%d' class='btn-del' onclick=\"return confirm('Tem certeza?');\">EXCLUIR</a>"
+                "<form action='/deletar' method='POST' style='display:inline; margin:0;'>"
+                "<input type='hidden' name='id' value='%d'>"
+                "<button type='submit' class='btn-del'>EXCLUIR</button>"
+                "</form>"
                 "</div>", 
                 r.codigo, r.id, r.descricao, r.id);
             html += itemBuf;
@@ -296,25 +302,77 @@ void handleList() {
         html += "<div style='text-align:center; color:white;'>Nenhum produto cadastrado.</div>";
     }
 
+    // DEBUG FOOTER
+    char debugBuf[128];
+    sprintf(debugBuf, "<div style='text-align:center; color:#aaa; font-size:10px; margin-top:20px;'>Total RAM: %d | Heap: %d | V: RAM_V2</div>", 
+        getTotalReceitas(), ESP.getFreeHeap());
+    html += debugBuf;
+
     html += "</div></body></html>";
+    server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    server.sendHeader("Pragma", "no-cache");
+    server.sendHeader("Expires", "0");
     server.send(200, "text/html", html);
 }
 
 void handleDelete() {
+    String html = R"rawliteral(
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Produto Excluido</title>
+      <style>
+        body { background: linear-gradient(135deg, #003366 0%, #00d2ff 100%); font-family: 'Segoe UI', sans-serif; min-height: 100vh; padding: 20px; display: flex; align-items: center; justify-content: center; }
+        .container { max-width: 400px; width: 100%; text-align: center; }
+        .card { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        h1 { color: #003366; margin-bottom: 10px; }
+        p { color: #666; font-size: 16px; margin-bottom: 25px; }
+        .btn { display: inline-block; width: 100%; padding: 15px; background: #28a745; color: white; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 16px; box-sizing: border-box; }
+        .btn:hover { opacity: 0.9; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="card">
+    )rawliteral";
+
     if (server.hasArg("id")) {
         int id = server.arg("id").toInt();
+        
+        // 1. Executa Exclusao
         desativarReceita(id);
         
-        // Avisa os slaves para removerem também (mandando com ativa=false)
-        Receita r = carregarReceitaMemoria(id); // Carrega ela já desativada
+        // 2. Verifica Status Pós-Exclusão
+        Receita r = carregarReceitaMemoria(id);
+        
+        // Avisa os slaves
         enviarReceitaParaSlaves(r);
         
         // Atualiza a tela do Master
         atualizarListaProdutos();
+
+        html += "<h1>Produto Excluido!</h1>";
+        html += "<p>O produto <strong>ID " + String(id) + "</strong> foi removido com sucesso.</p>";
+        html += "<a href='/lista' class='btn'>VOLTAR PARA LISTA</a>";
+        
+    } else {
+        html += "<h1 style='color:red'>Erro</h1>";
+        html += "<p>Nenhum ID fornecido.</p>";
+        html += "<a href='/lista' class='btn' style='background:#666'>VOLTAR</a>";
     }
-    // Redireciona de volta para a lista
-    server.sendHeader("Location", "/lista");
-    server.send(303);
+
+    html += "</div></div></body></html>";
+
+    server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    server.send(200, "text/html", html);
+}
+
+void handleReset() {
+    limparMemoria();
+    Serial.println(">>> WEB REQUEST: MEMORIA LIMPA!");
+    server.send(200, "text/html", "<h1>Memoria Limpa!</h1><a href='/'>Voltar</a>");
 }
 
 void setupNetwork() {
@@ -335,6 +393,7 @@ void setupNetwork() {
     server.on("/salvar", handleSave);
     server.on("/lista", handleList);
     server.on("/deletar", handleDelete);
+    server.on("/reset", handleReset);
     server.onNotFound(handleRoot); 
     server.begin();
 }
