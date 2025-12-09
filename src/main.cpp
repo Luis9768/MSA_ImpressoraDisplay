@@ -1,59 +1,83 @@
 #include <Arduino.h>
-#include <WiFi.h>
-#include <esp_now.h>
-#include <esp_wifi.h>
-#include "Common.h"
+#include "Config.h"
 #include "DisplayManager.h"
+#include "NetworkSlave.h"
 
-const char* SSID_MASTER = "MASTER_PRODUCAO"; // Nome da rede do Master
-
-Receita receitaAtual;
-volatile bool novaMensagem = false;
-
-// Acha o canal do Master
-int32_t getWiFiChannel(const char *ssid) {
-  if (int32_t n = WiFi.scanNetworks()) {
-    for (uint8_t i = 0; i < n; i++) {
-      if (!strcmp(ssid, WiFi.SSID(i).c_str())) return WiFi.channel(i);
-    }
-  }
-  return 0;
-}
-
-// Callback (Recebeu dados)
-void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
-  if (len != sizeof(PacoteRede)) return;
-  PacoteRede pacote;
-  memcpy(&pacote, incomingData, sizeof(pacote));
-
-  if (pacote.tipo == 1) {
-    receitaAtual = pacote.dados;
-    novaMensagem = true;
-  }
-}
+// Estado da Aplicação
+// 0 = Lista de Produtos
+// 1 = Tela de Produção
+int estadoAtual = 0;
+int idProdutoAtual = 0;
+int contadorProducao = 0;
 
 void setup() {
   Serial.begin(115200);
-  setupDisplay(); // Liga a tela primeiro
   
-  WiFi.mode(WIFI_STA);
-  // Procura e conecta no canal certo
-  int32_t channel = getWiFiChannel(SSID_MASTER);
-  if (channel > 0) {
-    esp_wifi_set_promiscuous(true);
-    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-    esp_wifi_set_promiscuous(false);
-  }
-
-  if (esp_now_init() != ESP_OK) ESP.restart();
-  esp_now_register_recv_cb(esp_now_recv_cb_t(OnDataRecv));
+  // 1. Inicializa Display (LVGL)
+  setupDisplay();
+  
+  // 2. Inicializa Rede (ESP-NOW)
+  setupNetworkSlave();
+  
+  Serial.println(">>> SLAVE INICIADO <<<");
 }
 
 void loop() {
-  loopDisplay(); // Mantém a tela viva
+  // Mantém a UI responsiva
+  loopDisplay();
+  loopNetworkSlave();
 
-  if (novaMensagem) {
-    novaMensagem = false;
-    mostrarTelaProducao(receitaAtual); // Atualiza o desenho
+  // Lógica de Navegação
+  int acao = verificarToque();
+
+  if (estadoAtual == 0) { // ESTADO: LISTA
+    
+    // Se tocou em algum produto (ID > 0)
+    if (acao > 0) {
+      Serial.printf("Entrando no produto ID %d\n", acao);
+      idProdutoAtual = acao;
+      contadorProducao = 0; // Reseta contador
+      
+      // Busca os dados do produto
+      std::vector<Receita> lista = getListaReceitas();
+      for (const auto& r : lista) {
+        if (r.id == idProdutoAtual) {
+          mostrarTelaProducao(r);
+          estadoAtual = 1; // Muda para produção
+          break;
+        }
+      }
+    }
+    
+    // Se houve atualização na lista vinda do Master
+    if (novaListaDisponivel()) {
+      Serial.println("Lista atualizada pelo Master!");
+      mostrarListaSlave(getListaReceitas());
+      confirmarAtualizacaoLista();
+    }
+
+  } else if (estadoAtual == 1) { // ESTADO: PRODUÇÃO
+    
+    // Se pediu para voltar (ID -1)
+    if (acao == -1) {
+      Serial.println("Voltando para a lista...");
+      estadoAtual = 0;
+      idProdutoAtual = 0;
+      mostrarListaSlave(getListaReceitas());
+    }
+    
+    // AQUI: Lógica do Scanner/Contador
+    if (Serial.available()) {
+      char c = Serial.read();
+      // Ignora quebra de linha
+      if (c != '\n' && c != '\r') {
+        contadorProducao++;
+        atualizarContador(contadorProducao);
+        Serial.printf("Contagem: %d\n", contadorProducao);
+      }
+    }
   }
+  
+  // Pequeno delay para não fritar a CPU (opcional, mas bom para LVGL)
+  delay(5); 
 }

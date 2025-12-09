@@ -3,10 +3,113 @@
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <XPT2046_Touchscreen.h>
+#include <lvgl.h>
 
 TFT_eSPI tft = TFT_eSPI(); 
 SPIClass touchSpi(VSPI);
 XPT2046_Touchscreen touch(TOUCH_XPT_CS, TOUCH_XPT_IRQ);
+
+// Variável de controle de seleção
+// 0 = Nenhuma seleção (Lista)
+// >0 = ID do produto selecionado
+// -1 = Solicitou voltar
+volatile int produtoSelecionado = 0;
+
+void event_handler_item(lv_event_t * e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code == LV_EVENT_CLICKED) {
+        int id = (int)(intptr_t)lv_event_get_user_data(e);
+        produtoSelecionado = id;
+    }
+}
+
+void event_handler_voltar(lv_event_t * e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code == LV_EVENT_CLICKED) {
+        produtoSelecionado = -1;
+    }
+}
+
+int verificarToque() {
+    int ret = produtoSelecionado;
+    if (ret == -1) produtoSelecionado = 0; // Reset ao ler o voltar
+    return ret;
+}
+
+void mostrarListaSlave(std::vector<Receita> lista) {
+    lv_obj_clean(lv_scr_act());
+    produtoSelecionado = 0;
+
+    // Cabeçalho
+    lv_obj_t * header = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(header, 240, 50);
+    lv_obj_set_style_bg_color(header, lv_color_hex(0x003366), 0);
+    lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
+    
+    lv_obj_t * title = lv_label_create(header);
+    lv_label_set_text(title, "SELECIONE O PRODUTO");
+    lv_obj_center(title);
+    lv_obj_set_style_text_color(title, lv_color_white(), 0);
+
+    // Lista (Container com Scroll)
+    lv_obj_t * list = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(list, 240, 270);
+    lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(list, 10, 0);
+    lv_obj_set_style_pad_row(list, 10, 0);
+
+    if (lista.empty()) {
+        lv_obj_t * lbl = lv_label_create(list);
+        lv_label_set_text(lbl, "Aguardando dados...\n\nSalve um produto no\nMaster para aparecer aqui.");
+        lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_center(lbl);
+        return;
+    }
+
+    for (const auto& r : lista) {
+        // Cria um botão para cada item
+        lv_obj_t * btn = lv_btn_create(list);
+        lv_obj_set_width(btn, lv_pct(100));
+        lv_obj_set_height(btn, 60);
+        lv_obj_set_style_bg_color(btn, lv_color_white(), 0);
+        lv_obj_set_style_bg_color(btn, lv_color_hex(0xEEEEEE), LV_STATE_PRESSED);
+        lv_obj_set_style_shadow_width(btn, 10, 0);
+        lv_obj_set_style_shadow_color(btn, lv_palette_main(LV_PALETTE_GREY), 0);
+        lv_obj_set_style_shadow_opa(btn, 30, 0);
+        
+        // Callback
+        lv_obj_add_event_cb(btn, event_handler_item, LV_EVENT_CLICKED, (void*)(intptr_t)r.id);
+
+        // Texto Código
+        lv_obj_t * lblCod = lv_label_create(btn);
+        lv_label_set_text(lblCod, r.codigo);
+        lv_obj_align(lblCod, LV_ALIGN_TOP_LEFT, 0, 0);
+        lv_obj_set_style_text_color(lblCod, lv_color_hex(0x003366), 0);
+        lv_obj_set_style_text_font(lblCod, &lv_font_montserrat_14, 0);
+
+        // Texto Descrição
+        lv_obj_t * lblDesc = lv_label_create(btn);
+        lv_label_set_text(lblDesc, r.descricao);
+        lv_obj_align(lblDesc, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+        lv_obj_set_style_text_color(lblDesc, lv_color_hex(0x666666), 0);
+        lv_label_set_long_mode(lblDesc, LV_LABEL_LONG_DOT);
+        lv_obj_set_width(lblDesc, 150);
+
+        // Badge Quantidade
+        lv_obj_t * badge = lv_obj_create(btn);
+        lv_obj_set_size(badge, 50, 25);
+        lv_obj_align(badge, LV_ALIGN_RIGHT_MID, 0, 0);
+        lv_obj_set_style_bg_color(badge, lv_color_hex(0x28a745), 0);
+        lv_obj_set_style_radius(badge, 10, 0);
+        lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t * lblQtd = lv_label_create(badge);
+        lv_label_set_text_fmt(lblQtd, "%d", r.quantidade);
+        lv_obj_center(lblQtd);
+        lv_obj_set_style_text_color(lblQtd, lv_color_white(), 0);
+    }
+}
 
 static lv_disp_draw_buf_t draw_buf;
 static lv_color_t buf[240 * 20]; // Buffer vertical
@@ -64,18 +167,46 @@ void mostrarTelaProducao(Receita r) {
     lv_obj_set_style_text_color(lblMeta, lv_palette_main(LV_PALETTE_GREY), 0);
 
     // Contador Gigante
-    lv_obj_t *lblContador = lv_label_create(lv_scr_act());
+    static lv_obj_t * lblContador = NULL; // Static para persistir
+    lblContador = lv_label_create(lv_scr_act());
     lv_label_set_text(lblContador, "0");
     lv_obj_center(lblContador);
     lv_obj_set_style_text_font(lblContador, &lv_font_montserrat_32, 0);
     lv_obj_set_style_transform_zoom(lblContador, 512, 0); // Zoom 2x
     lv_obj_set_style_text_color(lblContador, lv_color_hex(0x28a745), 0);
+    
+    // Salva ponteiro globalmente (gambiarra segura para este escopo)
+    lv_obj_set_user_data(lblContador, (void*)999); // Marcador
 
-    // Rodapé
+    // Botão Voltar
+    lv_obj_t * btnVoltar = lv_btn_create(lv_scr_act());
+    lv_obj_set_size(btnVoltar, 100, 40);
+    lv_obj_align(btnVoltar, LV_ALIGN_BOTTOM_LEFT, 10, -10);
+    lv_obj_set_style_bg_color(btnVoltar, lv_color_hex(0xDC3545), 0);
+    lv_obj_add_event_cb(btnVoltar, event_handler_voltar, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t * lblVoltar = lv_label_create(btnVoltar);
+    lv_label_set_text(lblVoltar, "SAIR");
+    lv_obj_center(lblVoltar);
+
+    // Rodapé Status
     lv_obj_t *footer = lv_label_create(lv_scr_act());
     lv_label_set_text(footer, "STATUS: OK");
-    lv_obj_align(footer, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_align(footer, LV_ALIGN_BOTTOM_RIGHT, -10, -20);
     lv_obj_set_style_text_color(footer, lv_color_hex(0xFF9900), 0);
+}
+
+void atualizarContador(int qtd) {
+    // Busca o objeto na tela ativa (meio feio, mas evita variavel global solta)
+    lv_obj_t * screen = lv_scr_act();
+    uint32_t count = lv_obj_get_child_cnt(screen);
+    for(uint32_t i=0; i<count; i++) {
+        lv_obj_t * child = lv_obj_get_child(screen, i);
+        if ((int)(intptr_t)lv_obj_get_user_data(child) == 999) {
+            lv_label_set_text_fmt(child, "%d", qtd);
+            return;
+        }
+    }
 }
 
 void setupDisplay() {
@@ -104,11 +235,8 @@ void setupDisplay() {
     indev_drv.read_cb = my_touch_read;
     lv_indev_drv_register(&indev_drv);
 
-    // Tela de Espera
-    lv_obj_t *lbl = lv_label_create(lv_scr_act());
-    lv_label_set_text(lbl, "SLAVE\nVERTICAL\n\nAguardando...");
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_center(lbl);
+    // Tela Inicial
+    mostrarListaSlave({});
 }
 
 void loopDisplay() {
