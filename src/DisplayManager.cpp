@@ -26,13 +26,16 @@ void event_handler_item(lv_event_t * e) {
 void event_handler_voltar(lv_event_t * e) {
     lv_event_code_t code = lv_event_get_code(e);
     if(code == LV_EVENT_CLICKED) {
+        Serial.println(">>> CLIQUE NO BOTAO VOLTAR DETECTADO <<<");
         produtoSelecionado = -1;
     }
 }
 
 int verificarToque() {
     int ret = produtoSelecionado;
-    if (ret == -1) produtoSelecionado = 0; // Reset ao ler o voltar
+    if (ret != 0) {
+        produtoSelecionado = 0; // Consome o evento para não repetir
+    }
     return ret;
 }
 
@@ -127,9 +130,9 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
 void my_touch_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
     if (touch.touched()) {
         TS_Point p = touch.getPoint();
-        // Calibração Vertical (X vira Y)
-        int16_t x = map(p.y, 240, 3800, 0, 240);
-        int16_t y = map(p.x, 200, 3700, 0, 320);
+        // Calibração Vertical (X vira Y) - Ajustada para melhor sensibilidade nas bordas
+        int16_t x = map(p.y, 200, 3900, 0, 240);
+        int16_t y = map(p.x, 200, 3900, 0, 320);
         if(x < 0) x = 0; if(x >= 240) x = 239;
         if(y < 0) y = 0; if(y >= 320) y = 319;
         data->state = LV_INDEV_STATE_PR;
@@ -178,10 +181,10 @@ void mostrarTelaProducao(Receita r) {
     // Salva ponteiro globalmente (gambiarra segura para este escopo)
     lv_obj_set_user_data(lblContador, (void*)999); // Marcador
 
-    // Botão Voltar
+    // Botão Voltar - Maior e mais afastado da borda
     lv_obj_t * btnVoltar = lv_btn_create(lv_scr_act());
-    lv_obj_set_size(btnVoltar, 100, 40);
-    lv_obj_align(btnVoltar, LV_ALIGN_BOTTOM_LEFT, 10, -10);
+    lv_obj_set_size(btnVoltar, 140, 70); // Bem grande para facilitar o toque
+    lv_obj_align(btnVoltar, LV_ALIGN_BOTTOM_LEFT, 20, -20);
     lv_obj_set_style_bg_color(btnVoltar, lv_color_hex(0xDC3545), 0);
     lv_obj_add_event_cb(btnVoltar, event_handler_voltar, LV_EVENT_CLICKED, NULL);
 
