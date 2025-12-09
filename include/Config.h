@@ -28,6 +28,6 @@
 #define PINO_EXTRA_2   27 
 
 // --- Limites ---
-#define MAX_RECEITAS 50
+#define MAX_RECEITAS 200
 
 #endif

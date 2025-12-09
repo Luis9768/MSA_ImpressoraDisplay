@@ -7,7 +7,7 @@ Receita cacheReceitas[MAX_RECEITAS + 1]; // Cache em RAM (Index 1 a 50)
 int totalReceitasRAM = 0;
 
 void setupStorage() {
-    preferences.begin("dados-prod", false);
+    preferences.begin("msa_v3", false);
     
     // VERIFICACAO DE VERSAO PARA FORMATACAO
     int versao = preferences.getInt("versao_db", 0);
@@ -15,6 +15,7 @@ void setupStorage() {
         Serial.println(">>> NOVA VERSAO DETECTADA: FORMATANDO MEMORIA...");
         preferences.clear();
         preferences.putInt("versao_db", 1);
+        preferences.putInt("total", 0);
         Serial.println(">>> MEMORIA FORMATADA COM SUCESSO!");
     }
 
@@ -50,7 +51,7 @@ void salvarReceitaMemoria(Receita r) {
     cacheReceitas[r.id] = r;
 
     // 2. Atualiza Flash
-    preferences.begin("dados-prod", false);
+    preferences.begin("msa_v3", false);
     char chave[10];
     sprintf(chave, "rec_%d", r.id);
     preferences.putBytes(chave, &r, sizeof(Receita));
@@ -77,10 +78,21 @@ int getTotalReceitas() {
 }
 
 void limparMemoria() {
-    preferences.begin("dados-prod", false);
+    preferences.begin("msa_v3", false);
     preferences.clear();
+    delay(200); 
     preferences.putInt("versao_db", 1);
+    size_t wrote = preferences.putInt("total", 0); 
+    Serial.printf(">>> RESET: Escreveu 'total'=0? Bytes: %d\n", wrote);
+    
+    // Verificacao
+    int check = preferences.getInt("total", -1);
+    Serial.printf(">>> RESET CHECK: Valor lido de 'total': %d\n", check);
+
     preferences.end();
+
+    // Reset do contador global
+    totalReceitasRAM = 0;
 
     // Limpa RAM tambem
     for (int i = 1; i <= MAX_RECEITAS; i++) {
@@ -98,7 +110,7 @@ void desativarReceita(int id) {
     cacheReceitas[id].ativa = false;
 
     // 2. Atualiza Flash
-    preferences.begin("dados-prod", false);
+    preferences.begin("msa_v3", false);
     char chave[10];
     sprintf(chave, "rec_%d", id);
     preferences.putBytes(chave, &cacheReceitas[id], sizeof(Receita));

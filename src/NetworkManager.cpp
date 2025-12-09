@@ -6,6 +6,7 @@
 #include <esp_now.h>
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <Preferences.h>
 
 WebServer server(80);
 DNSServer dnsServer;
@@ -144,13 +145,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     <form action="/salvar" method="GET">
       
-      <div class="form-group grp-id">
-        <span class="label">ID do Sistema</span>
-        <div class="input-wrapper">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#ff9900" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>
-          <input type="number" name="id" placeholder="1" required>
-        </div>
-      </div>
+      <!-- ID AUTOMATICO (REMOVIDO INPUT) -->
 
       <div class="form-group">
         <span class="label">Código do Produto</span>
@@ -189,7 +184,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 
     <div class="footer">
       <a href="/lista" style="color: #003366; text-decoration: none; font-weight: bold; font-size: 14px;">GERENCIAR PRODUTOS</a><br><br>
-      MSA Technology V2.0
+      MSA Technology V2.1
     </div>
   </div>
 
@@ -210,7 +205,15 @@ void handleRoot() { server.send(200, "text/html", index_html); }
 
 void handleSave() {
     Receita r;
-    r.id = server.arg("id").toInt();
+    
+    // AUTO ID
+    int proximoId = getTotalReceitas() + 1;
+    if (proximoId > MAX_RECEITAS) {
+        server.send(200, "text/html", "<h1>Erro: Memoria Cheia!</h1><a href='/'>Voltar</a>");
+        return;
+    }
+    r.id = proximoId;
+
     r.quantidade = server.arg("qtd").toInt();
     strncpy(r.codigo, server.arg("cod").c_str(), 15);
     strncpy(r.descricao, server.arg("desc").c_str(), 31);
@@ -273,7 +276,8 @@ void handleList() {
             <h1>Produtos Ativos</h1>
         </div>
         <a href="/" class="btn-back">VOLTAR PARA CADASTRO</a>
-        <a href="/reset" class="btn-back" style="background: #dc3545;" onclick="return confirm('ATENCAO: Isso apaga TUDO! Confirma?');">LIMPAR TUDO (RESET)</a>
+        
+        <a href="/confirmar_reset" class="btn-back" style="background: #dc3545;">LIMPAR TUDO (RESET V3)</a>
     )rawliteral";
 
     int total = getTotalReceitas();
@@ -371,8 +375,46 @@ void handleDelete() {
 
 void handleReset() {
     limparMemoria();
-    Serial.println(">>> WEB REQUEST: MEMORIA LIMPA!");
-    server.send(200, "text/html", "<h1>Memoria Limpa!</h1><a href='/'>Voltar</a>");
+    Serial.println(">>> WEB REQUEST: MEMORIA LIMPA! REINICIANDO...");
+    server.send(200, "text/html", "<h1>Memoria Limpa! Reiniciando...</h1><p>Aguarde 5 segundos e recarregue a pagina.</p><script>setTimeout(function(){window.location.href='/';}, 5000);</script>");
+    delay(1000);
+    ESP.restart();
+}
+
+void handleConfirmReset() {
+    String html = R"rawliteral(
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Confirmar Reset</title>
+      <style>
+        body { background: #003366; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; padding: 20px; text-align: center; color: white; }
+        .card { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        h1 { color: #dc3545; margin-top: 0; }
+        p { font-size: 18px; margin-bottom: 30px; }
+        .btn { display: block; width: 100%; padding: 15px; border-radius: 10px; font-weight: bold; font-size: 18px; cursor: pointer; text-decoration: none; margin-bottom: 10px; border: none; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>ATENÇÃO!</h1>
+        <p>Você tem certeza que deseja APAGAR TODOS os produtos e reiniciar o sistema?</p>
+        <p><strong>Essa ação não pode ser desfeita.</strong></p>
+        
+        <form action="/reset" method="POST">
+            <button type="submit" class="btn btn-danger">SIM, APAGAR TUDO</button>
+        </form>
+        
+        <a href="/lista" class="btn btn-secondary">CANCELAR</a>
+      </div>
+    </body>
+    </html>
+    )rawliteral";
+    server.send(200, "text/html", html);
 }
 
 void setupNetwork() {
@@ -393,7 +435,23 @@ void setupNetwork() {
     server.on("/salvar", handleSave);
     server.on("/lista", handleList);
     server.on("/deletar", handleDelete);
+    server.on("/confirmar_reset", handleConfirmReset);
     server.on("/reset", handleReset);
+    server.on("/debug", []() {
+        String html = "<h1>Debug NVS</h1>";
+        html += "<p>RAM Total: " + String(getTotalReceitas()) + "</p>";
+        
+        Preferences p; 
+        p.begin("msa_v3", true);
+        int nvsTotal = p.getInt("total", -1);
+        int versao = p.getInt("versao_db", -1);
+        p.end();
+        
+        html += "<p>NVS Total: " + String(nvsTotal) + "</p>";
+        html += "<p>NVS Versao: " + String(versao) + "</p>";
+        html += "<a href='/'>Voltar</a>";
+        server.send(200, "text/html", html);
+    });
     server.onNotFound(handleRoot); 
     server.begin();
 }
