@@ -60,7 +60,7 @@ void mostrarListaSlave(std::vector<Receita> lista) {
     lv_obj_align(list, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(list, 10, 0);
-    lv_obj_set_style_pad_row(list, 10, 0);
+    lv_obj_set_style_pad_row(list, 25, 0); // Mais espaco entre itens
 
     if (lista.empty()) {
         lv_obj_t * lbl = lv_label_create(list);
@@ -74,7 +74,7 @@ void mostrarListaSlave(std::vector<Receita> lista) {
         // Cria um botão para cada item
         lv_obj_t * btn = lv_btn_create(list);
         lv_obj_set_width(btn, lv_pct(100));
-        lv_obj_set_height(btn, 60);
+        lv_obj_set_height(btn, 85); // Botao mais alto para facilitar o toque
         lv_obj_set_style_bg_color(btn, lv_color_white(), 0);
         lv_obj_set_style_bg_color(btn, lv_color_hex(0xEEEEEE), LV_STATE_PRESSED);
         lv_obj_set_style_shadow_width(btn, 10, 0);
