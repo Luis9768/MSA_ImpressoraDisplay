@@ -7,8 +7,12 @@
 void setupDisplay();
 void loopDisplay();
 
-// Mostra a lista de produtos recebidos do Master
-void mostrarListaSlave(std::vector<Receita> lista);
+// Mostra tela de seleção em Carousel (Card por Card)
+void mostrarCarouselSlave(std::vector<Receita> lista, int indice);
+
+// Funções de navegação do Carousel
+void proximoProdutoCarousel();
+void entrarProdutoCarousel();
 
 // Mostra a tela de contagem/produção
 void mostrarTelaProducao(Receita r);

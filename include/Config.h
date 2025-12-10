@@ -12,4 +12,8 @@
 #define TOUCH_XPT_MISO 39
 #define TOUCH_XPT_CLK  25
 
+// Printer Config
+#define PRINTER_TX_PIN 27
+#define PRINTER_BAUD 9600
+
 #endif

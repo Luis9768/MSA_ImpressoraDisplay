@@ -38,10 +38,13 @@ void carregarReceitasNVS() {
 
 // Callback quando recebe dados
 void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
+    Serial.printf(">>> RECVD: %d bytes <<<\n", len);
     if (len != sizeof(PacoteRede)) return;
     
     PacoteRede pacote;
     memcpy(&pacote, incomingData, sizeof(pacote));
+
+    Serial.printf(">>> PKT TIPO: %d <<<\n", pacote.tipo);
 
     if (pacote.tipo == 1) { // Receita Individual
         Receita r = pacote.dados;
@@ -77,6 +80,12 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
         }
 
         listaAtualizada = true;
+    } else if (pacote.tipo == 2) { // RESET TOTAL (Vindo do Master)
+        Serial.println(">>> COMANDO DE RESET TOTAL RECEBIDO <<<");
+        listaReceitas.clear();
+        preferences.clear(); // Limpa NVS
+        preferences.putInt("reset_done", 1); // Mantém flag de reset inicial
+        listaAtualizada = true;
     }
 }
 
@@ -91,13 +100,13 @@ int32_t getWiFiChannel(const char *ssid) {
 
 void setupNetworkSlave() {
     // Inicia NVS
-    preferences.begin("slave_db_v3", false);
+    preferences.begin("slave_db_v5", false);
     
     // Reset Forcado na primeira vez
     if (preferences.getInt("reset_done", 0) == 0) {
         preferences.clear();
         preferences.putInt("reset_done", 1);
-        Serial.println(">>> SLAVE MEMORY RESET (V3) <<<");
+        Serial.println(">>> SLAVE MEMORY RESET (V5) <<<");
     }
 
     carregarReceitasNVS();
