@@ -35,6 +35,53 @@ void loop() {
   // Lógica de Navegação
   int acao = verificarToque();
 
+  // --- 1. GLOBAL: Verifica atualizações de lista (Prioridade Máxima) ---
+  if (novaListaDisponivel()) {
+    Serial.println(">>> UPDATE: Lista atualizada pelo Master! <<<");
+    std::vector<Receita> novaLista = getListaReceitas();
+    
+    Serial.printf("DEBUG: EstadoAtual=%d, IDProdutoAtual=%d, TamanhoLista=%d\n", estadoAtual, idProdutoAtual, novaLista.size());
+
+    bool produtoAtualExiste = false;
+
+    // Se lista vazia, força saída
+    if (novaLista.empty()) {
+        Serial.println("DEBUG: Lista VAZIA! Forçando saída.");
+        idProdutoAtual = 0;
+        estadoAtual = 0;
+    } 
+    // Se estamos em produção, verifica se o produto ainda existe
+    else if (estadoAtual == 1 && idProdutoAtual > 0) {
+        Serial.println("DEBUG: Verificando se produto atual ainda existe...");
+        for (const auto& r : novaLista) {
+            if (r.id == idProdutoAtual) {
+                produtoAtualExiste = true;
+                receitaAtiva = r; 
+                Serial.println("DEBUG: Produto ENCONTRADO na nova lista.");
+                break;
+            }
+        }
+        
+        if (!produtoAtualExiste) {
+            Serial.println("DEBUG: Produto NAO ENCONTRADO! Removido! Voltando...");
+            idProdutoAtual = 0;
+            estadoAtual = 0; // Força volta para carousel
+        }
+    } else {
+       // Se o ID mudou ou algo assim, garantimos que não estamos em ID invalido
+       if (estadoAtual == 1 && idProdutoAtual == 0) estadoAtual = 0;
+    }
+
+    // Atualiza UI se estiver no Carousel (ou foi forçado a voltar)
+    if (estadoAtual == 0) {
+        Serial.println("DEBUG: Atualizando Carousel UI.");
+        mostrarCarouselSlave(novaLista, 0); 
+    }
+    
+    confirmarAtualizacaoLista();
+  }
+  // --------------------------------------------------------------------
+
   if (estadoAtual == 0) { // ESTADO: CAROUSEL
     
     // Se selecionou algum produto (ID > 0)
@@ -54,52 +101,6 @@ void loop() {
         }
       }
     }
-    
-    // Se houve atualização na lista vinda do Master
-    if (novaListaDisponivel()) {
-      Serial.println(">>> UPDATE: Lista atualizada pelo Master! <<<");
-      std::vector<Receita> novaLista = getListaReceitas();
-      
-      Serial.printf("DEBUG: EstadoAtual=%d, IDProdutoAtual=%d, TamanhoLista=%d\n", estadoAtual, idProdutoAtual, novaLista.size());
-
-      bool produtoAtualExiste = false;
-
-      // Se lista vazia, força saída
-      if (novaLista.empty()) {
-          Serial.println("DEBUG: Lista VAZIA! Forçando saída.");
-          idProdutoAtual = 0;
-          estadoAtual = 0;
-      } 
-      // Se estamos em produção, verifica se o produto ainda existe
-      else if (estadoAtual == 1 && idProdutoAtual > 0) {
-          Serial.println("DEBUG: Verificando se produto atual ainda existe...");
-          for (const auto& r : novaLista) {
-              if (r.id == idProdutoAtual) {
-                  produtoAtualExiste = true;
-                  receitaAtiva = r; 
-                  Serial.println("DEBUG: Produto ENCONTRADO na nova lista.");
-                  break;
-              }
-          }
-          
-          if (!produtoAtualExiste) {
-              Serial.println("DEBUG: Produto NAO ENCONTRADO! Removido! Voltando...");
-              idProdutoAtual = 0;
-              estadoAtual = 0; // Força volta para carousel
-          }
-      } else {
-         Serial.println("DEBUG: Não estava em produção ou ID invalido. Nada a fazer além de atualizar carousel.");
-      }
-
-      // Atualiza UI se voltou para carousel ou se estava nele
-      if (estadoAtual == 0) {
-          Serial.println("DEBUG: Atualizando Carousel UI.");
-          mostrarCarouselSlave(novaLista, 0); 
-      }
-      
-      confirmarAtualizacaoLista();
-    }
-
   } else if (estadoAtual == 1) { // ESTADO: PRODUÇÃO
     
     // Se pediu para voltar (ID -1)
