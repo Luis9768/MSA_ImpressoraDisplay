@@ -12,10 +12,14 @@ void setupPrinter() {
 void imprimirEtiqueta(Receita r, int contador) {
     if (r.id == 0) return;
 
-    // Dados Simulados para teste (já que o Slave não tem tela de RE/Data)
-    // Em um cenário real, esses dados viriam de variaveis globais ou da Receita
-    int reValor = 1234;
-    int dia = 10, mes = 12, ano = 25;
+    // --- DADOS PARA O ZPL ---
+    // Como o Slave não tem RTC nem Login de Operador (por enquanto),
+    // vamos usar valores padrão ou extrair do código se possível.
+    
+    // Tenta extrair data de algum lugar ou usa Data Atual (fixa por enquanto)
+    int dia = 11, mes = 12, ano = 25; 
+    int reValor = 9999; // RE Genérico para Slave
+    
     unsigned long codigoProd = atol(r.codigo);
 
     // Buffer para o comando ZPL
@@ -53,7 +57,7 @@ void imprimirEtiqueta(Receita r, int contador) {
         "^PQ1,0,1,Y^XZ\r\n",
         (unsigned long)codigoProd,
         r.descricao,
-        r.barcode[0] ? r.barcode : "0000000000000",
+        r.barcode[0] ? r.barcode : "7890000000000", // Barcode padrão se vazio
         (unsigned int)dia,
         (unsigned int)mes,
         (unsigned int)ano,
@@ -64,11 +68,7 @@ void imprimirEtiqueta(Receita r, int contador) {
         // Envia para impressora real
         printerSerial.write(reinterpret_cast<const uint8_t *>(zplBuffer), (size_t)escrito);
         printerSerial.flush();
-
-        // SIMULACAO NO TERMINAL
-        Serial.println("\n>>> [SIMULACAO IMPRESSORA] ZPL ENVIADO: <<<");
-        Serial.println(zplBuffer);
-        Serial.println(">>> [FIM ZPL] <<<\n");
+        Serial.printf(">>> ETIQUETA IMPRESSA: %s (Seq: %d) <<<\n", r.descricao, contador);
     } else {
         Serial.println("Erro ao montar ZPL!");
     }

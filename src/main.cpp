@@ -142,17 +142,37 @@ void loop() {
     }
     
     // Lógica do Scanner/Contador (SIMULAÇÃO VIA SERIAL)
+    // Lógica do Scanner (REAL)
     if (Serial.available()) {
       char c = Serial.read();
-      // Ignora quebra de linha
+      
+      // Filtra caracteres de controle comuns de leitores (CR/LF)
+      // Leitores geralmente mandam o código de barras + Enter
+      // Vamos considerar qualquer caractere válido como um "trigger" por enquanto,
+      // ou se quiser ler o barcode inteiro, precisaria de um buffer.
+      // Como o pedido foi "passar no scanner ele vai imprimir", vamos simplificar:
+      // Se receber algo e não for quebra de linha:
       if (c != '\n' && c != '\r') {
+        
+        // Verifica se já atingiu a meta da caixa
+        if (contadorProducao >= receitaAtiva.quantidade) {
+             Serial.println(">>> CAIXA CHEIA! PRODUCAO CONCLUIDA! <<<");
+             // Aqui poderia mostrar uma tela de aviso, mas por enquanto só ignora/avisa no serial
+             return; 
+        }
+
         contadorProducao++;
         atualizarContador(contadorProducao);
         
-        Serial.printf(">>> SCANNER SIMULADO: Contagem %d <<<\n", contadorProducao);
+        Serial.printf(">>> SCANNER: Item Validado! Contagem: %d / %d <<<\n", contadorProducao, receitaAtiva.quantidade);
         
         // Imprime Etiqueta
         imprimirEtiqueta(receitaAtiva, contadorProducao);
+
+        // Limpa buffer serial para evitar múltiplas leituras rapidas do mesmo código
+        // (Opcional, depende da velocidade do scanner)
+        delay(100); 
+        while(Serial.available()) Serial.read(); 
       }
     }
   }
