@@ -12,7 +12,7 @@ XPT2046_Touchscreen touch(TOUCH_XPT_CS, TOUCH_XPT_IRQ);
 
 // --- LVGL ---
 static lv_disp_draw_buf_t draw_buf;
-static lv_color_t buf[SCREEN_WIDTH * 20]; // Buffer aumentado para renderizar suave
+static lv_color_t buf[SCREEN_WIDTH * 10]; // Reduzido para economizar RAM (foi o que causou overflow)
 lv_obj_t *mainContainer = NULL; // Onde ficam os cards
 
 // Funções de Hardware (Flush/Touch)

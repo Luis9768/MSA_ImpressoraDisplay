@@ -7,6 +7,7 @@
 #include <WebServer.h>
 #include <DNSServer.h>
 #include <Preferences.h>
+#include <ArduinoOTA.h>
 
 WebServer server(80);
 DNSServer dnsServer;
@@ -201,6 +202,14 @@ void enviarReceitaParaSlaves(Receita r) {
     esp_now_send(broadcastAddr, (uint8_t *) &pct, sizeof(pct));
 }
 
+void enviarResetParaSlaves() {
+    PacoteRede pct;
+    pct.tipo = 2; // TIPO 2 = RESET TOTAL
+    // Zeramos os dados só por segurança
+    memset(&pct.dados, 0, sizeof(Receita));
+    esp_now_send(broadcastAddr, (uint8_t *) &pct, sizeof(pct));
+}
+
 void handleRoot() { server.send(200, "text/html", index_html); }
 
 void handleSave() {
@@ -374,6 +383,7 @@ void handleDelete() {
 }
 
 void handleReset() {
+    enviarResetParaSlaves(); // AVISA OS SLAVES ANTES DE APAGAR TUDO
     limparMemoria();
     Serial.println(">>> WEB REQUEST: MEMORIA LIMPA! REINICIANDO...");
     server.send(200, "text/html", "<h1>Memoria Limpa! Reiniciando...</h1><p>Aguarde 5 segundos e recarregue a pagina.</p><script>setTimeout(function(){window.location.href='/';}, 5000);</script>");
@@ -431,6 +441,27 @@ void setupNetwork() {
     peerInfo.encrypt = false;
     esp_now_add_peer(&peerInfo);
 
+    // --- OTA CONFIG ---
+    ArduinoOTA.setHostname(HOSTNAME);
+    
+    // Callbacks de progresso/erro (Opcional, mas util para debug Serial)
+    ArduinoOTA.onStart([]() { Serial.println("OTA Start"); });
+    ArduinoOTA.onEnd([]() { Serial.println("\nOTA End"); });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf("OTA Progress: %u%%\r", (progress / (total / 100)));
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf("Error[%u]: ", error);
+        if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+        else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+        else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+        else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+        else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    });
+
+    ArduinoOTA.begin();
+    Serial.println("OTA Master Iniciado (Porta IP)");
+
     server.on("/", handleRoot);
     server.on("/salvar", handleSave);
     server.on("/lista", handleList);
@@ -459,4 +490,5 @@ void setupNetwork() {
 void loopNetwork() {
     dnsServer.processNextRequest();
     server.handleClient();
+    ArduinoOTA.handle();
 }
