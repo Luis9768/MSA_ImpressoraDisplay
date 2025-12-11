@@ -20,6 +20,9 @@ void mostrarTelaProducao(Receita r);
 // Atualiza o número no contador
 void atualizarContador(int qtd);
 
+// Mostra alerta de caixa cheia
+void mostrarAlertaCaixaCheia();
+
 // Verifica toques na tela e retorna o ID do produto clicado (ou -1 se nenhum)
 // Se estiver na tela de produção, retorna -2 para "Sair"
 int verificarToque();

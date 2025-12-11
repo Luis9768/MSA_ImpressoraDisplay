@@ -1,8 +1,8 @@
-#include <Arduino.h>
 #include "Config.h"
 #include "DisplayManager.h"
 #include "NetworkSlave.h"
 #include "PrinterManager.h"
+#include <Arduino.h>
 
 // Estado da Aplicação
 // 0 = Lista de Produtos (Carousel)
@@ -14,16 +14,16 @@ Receita receitaAtiva; // Armazena a receita atual para impressão
 
 void setup() {
   Serial.begin(115200);
-  
+
   // 1. Inicializa Display (LVGL)
   setupDisplay();
-  
+
   // 2. Inicializa Rede (ESP-NOW)
   setupNetworkSlave();
 
   // 3. Inicializa Impressora
   setupPrinter();
-  
+
   Serial.println(">>> SLAVE INICIADO (CAROUSEL + PRINTER) <<<");
 }
 
@@ -33,66 +33,96 @@ void loop() {
   loopNetworkSlave();
 
   // Lógica de Navegação
+  // Lógica de Navegação
   int acao = verificarToque();
+
+  // GLOBAL: Debug e Tratamento de Serial (Scanner)
+  if (Serial.available()) {
+    char c = Serial.read();
+    // Ignora white-spaces basicos se quiser, ou processa tudo
+    if (c != '\n' && c != '\r') {
+
+      if (estadoAtual == 1) { // Só conta se estiver na tela de produção
+        if (contadorProducao >= receitaAtiva.quantidade) {
+          Serial.println(">>> CAIXA CHEIA! LIMITE ATINGIDO! <<<");
+          mostrarAlertaCaixaCheia(); // Chama o popup visual
+        } else {
+          contadorProducao++;
+          atualizarContador(contadorProducao);
+          Serial.printf(">>> SCANNER: Item Validado! Contagem: %d / %d <<<\n",
+                        contadorProducao, receitaAtiva.quantidade);
+          imprimirEtiqueta(receitaAtiva, contadorProducao);
+          delay(50);
+          while (Serial.available())
+            Serial.read(); // Limpa buffer
+        }
+      } else {
+        Serial.println(">>> AVISO: Recebido dado Serial fora da tela de "
+                       "produção. Ignorado. <<<");
+      }
+    }
+  }
 
   // --- 1. GLOBAL: Verifica atualizações de lista (Prioridade Máxima) ---
   if (novaListaDisponivel()) {
     Serial.println(">>> UPDATE: Lista atualizada pelo Master! <<<");
     std::vector<Receita> novaLista = getListaReceitas();
-    
-    Serial.printf("DEBUG: EstadoAtual=%d, IDProdutoAtual=%d, TamanhoLista=%d\n", estadoAtual, idProdutoAtual, novaLista.size());
+
+    Serial.printf("DEBUG: EstadoAtual=%d, IDProdutoAtual=%d, TamanhoLista=%d\n",
+                  estadoAtual, idProdutoAtual, novaLista.size());
 
     bool produtoAtualExiste = false;
 
     // Se lista vazia, força saída
     if (novaLista.empty()) {
-        Serial.println("DEBUG: Lista VAZIA! Forçando saída.");
-        idProdutoAtual = 0;
-        estadoAtual = 0;
-    } 
+      Serial.println("DEBUG: Lista VAZIA! Forçando saída.");
+      idProdutoAtual = 0;
+      estadoAtual = 0;
+    }
     // Se estamos em produção, verifica se o produto ainda existe
     else if (estadoAtual == 1 && idProdutoAtual > 0) {
-        Serial.println("DEBUG: Verificando se produto atual ainda existe...");
-        for (const auto& r : novaLista) {
-            if (r.id == idProdutoAtual) {
-                produtoAtualExiste = true;
-                receitaAtiva = r; 
-                Serial.println("DEBUG: Produto ENCONTRADO na nova lista.");
-                break;
-            }
+      Serial.println("DEBUG: Verificando se produto atual ainda existe...");
+      for (const auto &r : novaLista) {
+        if (r.id == idProdutoAtual) {
+          produtoAtualExiste = true;
+          receitaAtiva = r;
+          Serial.println("DEBUG: Produto ENCONTRADO na nova lista.");
+          break;
         }
-        
-        if (!produtoAtualExiste) {
-            Serial.println("DEBUG: Produto NAO ENCONTRADO! Removido! Voltando...");
-            idProdutoAtual = 0;
-            estadoAtual = 0; // Força volta para carousel
-        }
+      }
+
+      if (!produtoAtualExiste) {
+        Serial.println("DEBUG: Produto NAO ENCONTRADO! Removido! Voltando...");
+        idProdutoAtual = 0;
+        estadoAtual = 0; // Força volta para carousel
+      }
     } else {
-       // Se o ID mudou ou algo assim, garantimos que não estamos em ID invalido
-       if (estadoAtual == 1 && idProdutoAtual == 0) estadoAtual = 0;
+      // Se o ID mudou ou algo assim, garantimos que não estamos em ID invalido
+      if (estadoAtual == 1 && idProdutoAtual == 0)
+        estadoAtual = 0;
     }
 
     // Atualiza UI se estiver no Carousel (ou foi forçado a voltar)
     if (estadoAtual == 0) {
-        Serial.println("DEBUG: Atualizando Carousel UI.");
-        mostrarCarouselSlave(novaLista, 0); 
+      Serial.println("DEBUG: Atualizando Carousel UI.");
+      mostrarCarouselSlave(novaLista, 0);
     }
-    
+
     confirmarAtualizacaoLista();
   }
   // --------------------------------------------------------------------
 
   if (estadoAtual == 0) { // ESTADO: CAROUSEL
-    
+
     // Se selecionou algum produto (ID > 0)
     if (acao > 0) {
       Serial.printf("Entrando no produto ID %d\n", acao);
       idProdutoAtual = acao;
       contadorProducao = 0; // Reseta contador
-      
+
       // Busca os dados do produto
       std::vector<Receita> lista = getListaReceitas();
-      for (const auto& r : lista) {
+      for (const auto &r : lista) {
         if (r.id == idProdutoAtual) {
           receitaAtiva = r; // Salva para uso na impressão
           mostrarTelaProducao(r);
@@ -102,7 +132,7 @@ void loop() {
       }
     }
   } else if (estadoAtual == 1) { // ESTADO: PRODUÇÃO
-    
+
     // Se pediu para voltar (ID -1)
     // Se pediu para voltar (ID -1)
     if (acao == -1) {
@@ -114,10 +144,10 @@ void loop() {
     // Se pediu PRÓXIMO PRODUTO (ID -2)
     else if (acao == -2) {
       Serial.println("Navegando para proximo produto...");
-      
+
       std::vector<Receita> lista = getListaReceitas();
       int indexAtual = -1;
-      
+
       // Encontra indice atual
       for (int i = 0; i < lista.size(); i++) {
         if (lista[i].id == idProdutoAtual) {
@@ -130,53 +160,23 @@ void loop() {
       if (indexAtual != -1 && !lista.empty()) {
         int proximoIndex = (indexAtual + 1) % lista.size();
         Receita proxima = lista[proximoIndex];
-        
+
         // Atualiza estado
         idProdutoAtual = proxima.id;
         receitaAtiva = proxima;
         contadorProducao = 0; // Reseta na troca
-        
+
         mostrarTelaProducao(proxima);
-        Serial.printf("Trocado para ID %d: %s\n", proxima.id, proxima.descricao);
+        Serial.printf("Trocado para ID %d: %s\n", proxima.id,
+                      proxima.descricao);
       }
     }
-    
+
     // Lógica do Scanner/Contador (SIMULAÇÃO VIA SERIAL)
     // Lógica do Scanner (REAL)
-    if (Serial.available()) {
-      char c = Serial.read();
-      
-      // Filtra caracteres de controle comuns de leitores (CR/LF)
-      // Leitores geralmente mandam o código de barras + Enter
-      // Vamos considerar qualquer caractere válido como um "trigger" por enquanto,
-      // ou se quiser ler o barcode inteiro, precisaria de um buffer.
-      // Como o pedido foi "passar no scanner ele vai imprimir", vamos simplificar:
-      // Se receber algo e não for quebra de linha:
-      if (c != '\n' && c != '\r') {
-        
-        // Verifica se já atingiu a meta da caixa
-        if (contadorProducao >= receitaAtiva.quantidade) {
-             Serial.println(">>> CAIXA CHEIA! PRODUCAO CONCLUIDA! <<<");
-             // Aqui poderia mostrar uma tela de aviso, mas por enquanto só ignora/avisa no serial
-             return; 
-        }
-
-        contadorProducao++;
-        atualizarContador(contadorProducao);
-        
-        Serial.printf(">>> SCANNER: Item Validado! Contagem: %d / %d <<<\n", contadorProducao, receitaAtiva.quantidade);
-        
-        // Imprime Etiqueta
-        imprimirEtiqueta(receitaAtiva, contadorProducao);
-
-        // Limpa buffer serial para evitar múltiplas leituras rapidas do mesmo código
-        // (Opcional, depende da velocidade do scanner)
-        delay(100); 
-        while(Serial.available()) Serial.read(); 
-      }
-    }
+    // Serial handling moved to global scope
   }
-  
+
   // Pequeno delay para não fritar a CPU (opcional, mas bom para LVGL)
-  delay(5); 
+  delay(5);
 }
